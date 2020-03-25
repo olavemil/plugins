@@ -117,4 +117,43 @@ public final class CameraUtils {
           (long) lhs.getWidth() * lhs.getHeight() - (long) rhs.getWidth() * rhs.getHeight());
     }
   }
+
+  public static Size getBestCaptureSize(CameraCharacteristics characteristics, ResolutionPreset preset, double targetAspectRatio) {
+    final android.graphics.Rect activeArraySize = characteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
+    if (activeArraySize == null) {
+      return new Size(0, 0);
+    }
+    final int maxWidth = activeArraySize.width();
+    final int maxHeight = activeArraySize.height();
+
+    final int presetWidth = getDimensionsForPreset(preset).getWidth();
+    final int presetHeight = 16 * (int)(presetWidth / (16 * targetAspectRatio));
+    if (presetWidth <= maxWidth && presetHeight <= maxHeight) {
+      return new Size(presetWidth, presetHeight);
+    }
+    final int scaledWidth = 16 * ((int)(maxHeight * targetAspectRatio)/ 16);
+    if (scaledWidth <= maxWidth) {
+      return new Size(scaledWidth, maxHeight);
+    }
+    final int scaledHeight = 16 * (int)(maxWidth / (16 * targetAspectRatio));
+    return new Size(maxWidth, scaledHeight);
+  }
+
+  private static Size getDimensionsForPreset(ResolutionPreset preset) {
+    switch (preset) {
+      case low:
+        return new Size(320, 240);
+      case medium:
+        return new Size(720, 480);
+      case high:
+        return new Size(1280, 720);
+      case veryHigh:
+        return new Size(1920, 1080);
+      case ultraHigh:
+        return new Size(3840, 2160);
+      case max:
+        return new Size(Integer.MAX_VALUE, Integer.MAX_VALUE);
+    }
+    return new Size(0, 0);
+  }
 }

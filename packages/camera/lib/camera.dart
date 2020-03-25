@@ -38,6 +38,12 @@ enum ResolutionPreset {
   max,
 }
 
+enum FlashMode {
+  auto,
+  on,
+  off,
+}
+
 // ignore: inference_failure_on_function_return_type
 typedef onLatestImageAvailable = Function(CameraImage image);
 
@@ -58,6 +64,19 @@ String serializeResolutionPreset(ResolutionPreset resolutionPreset) {
       return 'low';
   }
   throw ArgumentError('Unknown ResolutionPreset value');
+}
+
+/// Returns the flash mode as a String.
+String serializeFlashMode(FlashMode flashMode) {
+  switch (flashMode) {
+    case FlashMode.auto:
+      return 'auto';
+    case FlashMode.on:
+      return 'on';
+    case FlashMode.off:
+      return 'off';
+  }
+  throw ArgumentError('Unknown flashMode value');
 }
 
 CameraLensDirection _parseCameraLensDirection(String string) {
@@ -584,6 +603,30 @@ class CameraController extends ValueNotifier<CameraValue> {
         <String, dynamic>{'textureId': _textureId},
       );
       await _eventSubscription?.cancel();
+    }
+  }
+
+  Future<void> setFlashMode(FlashMode mode) async {
+    ArgumentError.checkNotNull(mode, 'mode');
+    if (!value.isInitialized || _isDisposed) {
+      throw CameraException(
+        'Uninitialized CameraController',
+        'setFlashMode was called on uninitialized CameraController.',
+      );
+    }
+    if (value.isTakingPicture) {
+      throw CameraException(
+        'Previous capture has not returned yet.',
+        'setFlashMode was called before the previous capture returned.',
+      );
+    }
+    try {
+      await _channel.invokeMethod<void>(
+        'setFlashMode',
+        <String, dynamic>{'flashMode': serializeFlashMode(mode)},
+      );
+    } on PlatformException catch (e) {
+      throw CameraException(e.code, e.message);
     }
   }
 }

@@ -60,6 +60,7 @@ public class Camera {
   private boolean recordingVideo;
   private CamcorderProfile recordingProfile;
   private int currentOrientation = ORIENTATION_UNKNOWN;
+  private FlashMode flashMode;
 
   // Mirrors camera.dart
   public enum ResolutionPreset {
@@ -69,6 +70,10 @@ public class Camera {
     veryHigh,
     ultraHigh,
     max,
+  }
+
+  public enum FlashMode {
+    auto, on, off,
   }
 
   public Camera(
@@ -112,7 +117,7 @@ public class Camera {
     ResolutionPreset preset = ResolutionPreset.valueOf(resolutionPreset);
     recordingProfile =
         CameraUtils.getBestAvailableCamcorderProfileForResolutionPreset(cameraName, preset);
-    captureSize = new Size(recordingProfile.videoFrameWidth, recordingProfile.videoFrameHeight);
+    captureSize = CameraUtils.getBestCaptureSize(characteristics, preset, 4.0/3);
     previewSize = computeBestPreviewSize(cameraName, preset);
   }
 
@@ -249,6 +254,7 @@ public class Camera {
           cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
       captureBuilder.addTarget(pictureImageReader.getSurface());
       captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, getMediaOrientation());
+      setFlashModeForCaptureRequest(captureBuilder, flashMode);
 
       cameraCaptureSession.capture(
           captureBuilder.build(),
@@ -516,5 +522,34 @@ public class Camera {
             ? 0
             : (isFrontFacing) ? -currentOrientation : currentOrientation;
     return (sensorOrientationOffset + sensorOrientation + 360) % 360;
+  }
+
+  public void setFlashMode(String flashModeString, Result result) {
+    flashMode = FlashMode.valueOf(flashModeString);
+    result.success(null);
+  }
+
+  private static void setFlashModeForCaptureRequest(CaptureRequest.Builder captureRequestBuilder, FlashMode flashMode) {
+    switch (flashMode) {
+      case auto: {
+        captureRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO);
+        captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH);
+        captureRequestBuilder.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_OFF);
+        break;
+      }
+      case on: {
+        captureRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO);
+        captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON_ALWAYS_FLASH);
+        captureRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_START);
+        captureRequestBuilder.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_SINGLE);
+        break;
+      }
+      case off: {
+        captureRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO);
+        captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
+        captureRequestBuilder.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_OFF);
+        break;
+      }
+    }
   }
 }

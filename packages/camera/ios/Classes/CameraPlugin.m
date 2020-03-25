@@ -155,6 +155,30 @@ static ResolutionPreset getResolutionPresetForString(NSString *preset) {
   }
 }
 
+typedef enum {
+  flash_auto,
+  flash_on,
+  flash_off
+} FlashMode;
+
+static FlashMode getFlashModeForString(NSString *mode) {
+  if ([mode isEqualToString:@"auto"]) {
+    return flash_auto;
+  } else if ([mode isEqualToString:@"on"]) {
+    return flash_on;
+  } else if ([mode isEqualToString:@"off"]) {
+    return flash_off;
+  } else {
+    NSError *error = [NSError errorWithDomain:NSCocoaErrorDomain
+                                         code:NSURLErrorUnknown
+                                     userInfo:@{
+                                       NSLocalizedDescriptionKey : [NSString
+                                           stringWithFormat:@"Unknown flash mode %@", mode]
+                                     }];
+    @throw error;
+  }
+}
+
 @interface FLTCam : NSObject <FlutterTexture,
                               AVCaptureVideoDataOutputSampleBufferDelegate,
                               AVCaptureAudioDataOutputSampleBufferDelegate,
@@ -205,10 +229,12 @@ static ResolutionPreset getResolutionPresetForString(NSString *preset) {
 - (void)startImageStreamWithMessenger:(NSObject<FlutterBinaryMessenger> *)messenger;
 - (void)stopImageStream;
 - (void)captureToFile:(NSString *)filename result:(FlutterResult)result;
+- (void)setFlashMode:(NSString *)flashMode result:(FlutterResult)result;
 @end
 
 @implementation FLTCam {
   dispatch_queue_t _dispatchQueue;
+  FlashMode _flashMode;
 }
 // Format used for video and image streaming.
 FourCharCode const videoFormat = kCVPixelFormatType_32BGRA;
@@ -227,6 +253,7 @@ FourCharCode const videoFormat = kCVPixelFormatType_32BGRA;
   }
   _enableAudio = enableAudio;
   _dispatchQueue = dispatchQueue;
+  _flashMode = flash_auto;
   _captureSession = [[AVCaptureSession alloc] init];
 
   _captureDevice = [AVCaptureDevice deviceWithUniqueID:cameraName];
@@ -236,6 +263,11 @@ FourCharCode const videoFormat = kCVPixelFormatType_32BGRA;
   if (localError) {
     *error = localError;
     return nil;
+  }
+  if([_captureDevice lockForConfiguration:nil]) {
+    _captureDevice.focusMode = AVCaptureFocusModeContinuousAutoFocus;
+    _captureDevice.exposureMode = AVCaptureExposureModeContinuousAutoExposure;
+    [_captureDevice unlockForConfiguration];
   }
 
   _captureVideoOutput = [AVCaptureVideoDataOutput new];
@@ -276,6 +308,17 @@ FourCharCode const videoFormat = kCVPixelFormatType_32BGRA;
   AVCapturePhotoSettings *settings = [AVCapturePhotoSettings photoSettings];
   if (_resolutionPreset == max) {
     [settings setHighResolutionPhotoEnabled:YES];
+  }
+  switch (_flashMode) {
+    case flash_auto:
+      settings.flashMode = AVCaptureFlashModeAuto;
+      break;
+    case flash_on:
+      settings.flashMode = AVCaptureFlashModeOn;
+      break;
+    case flash_off:
+      settings.flashMode = AVCaptureFlashModeOff;
+      break;
   }
   [_capturePhotoOutput
       capturePhotoWithSettings:settings
@@ -759,6 +802,10 @@ FourCharCode const videoFormat = kCVPixelFormatType_32BGRA;
     }
   }
 }
+- (void)setFlashMode:(NSString *)flashMode result:(FlutterResult)result {
+    _flashMode = getFlashModeForString(flashMode);
+    result(nil);
+}
 @end
 
 @interface CameraPlugin ()
@@ -877,6 +924,8 @@ FourCharCode const videoFormat = kCVPixelFormatType_32BGRA;
   } else if ([@"resumeVideoRecording" isEqualToString:call.method]) {
     [_camera resumeVideoRecording];
     result(nil);
+  } else if ([@"setFlashMode" isEqualToString:call.method]) {
+    [_camera setFlashMode:call.arguments[@"flashMode"] result:result];
   } else {
     NSDictionary *argsMap = call.arguments;
     NSUInteger textureId = ((NSNumber *)argsMap[@"textureId"]).unsignedIntegerValue;

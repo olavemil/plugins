@@ -103,6 +103,11 @@ final class MethodCallHandlerImpl implements MethodChannel.MethodCallHandler {
           camera.resumeVideoRecording(result);
           break;
         }
+      case "setFlashMode":
+        {
+          camera.setFlashMode(call.argument("flashMode"), result);
+          break;
+        }
       case "startImageStream":
         {
           try {
