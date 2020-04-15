@@ -116,7 +116,7 @@ public class Camera {
         characteristics.get(CameraCharacteristics.LENS_FACING) == CameraMetadata.LENS_FACING_FRONT;
     ResolutionPreset preset = ResolutionPreset.valueOf(resolutionPreset);
     recordingProfile =
-        CameraUtils.getBestAvailableCamcorderProfileForResolutionPreset(cameraName, preset);
+        CameraUtils.getBestAvailableCamcorderProfileForResolutionPreset(cameraName, ResolutionPreset.ultraHigh);
     captureSize = CameraUtils.getBestCaptureSize(characteristics, preset, 4.0/3);
     previewSize = computeBestPreviewSize(cameraName, preset);
   }
