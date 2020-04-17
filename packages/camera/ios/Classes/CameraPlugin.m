@@ -80,9 +80,9 @@ static FlutterError *getFlutterError(NSError *error) {
   UIImage *image = [UIImage imageWithCGImage:[UIImage imageWithData:data].CGImage
                                        scale:1.0
                                  orientation:[self getImageRotation]];
-  CGSize newSize = CGSizeMake(image.size.height * 4/3, image.size.height);
+  CGSize newSize = CGSizeMake(image.size.width, image.size.width * 3/4);
   UIGraphicsBeginImageContext(newSize);
-  [image drawInRect:CGRectMake(0,0,newSize.width,newSize.height)];
+  [image drawInRect:CGRectMake(0,-(image.size.height - newSize.height)/2,newSize.width,newSize.height)];
   UIImage* newImage = UIGraphicsGetImageFromCurrentImageContext();
   UIGraphicsEndImageContext();
   // TODO(sigurdm): Consider writing file asynchronously.
