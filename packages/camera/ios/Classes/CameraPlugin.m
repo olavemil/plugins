@@ -303,7 +303,8 @@ FourCharCode const videoFormat = kCVPixelFormatType_32BGRA;
   _motionManager = [[CMMotionManager alloc] init];
   [_motionManager startAccelerometerUpdates];
 
-  [self setCaptureSessionPreset:_resolutionPreset];
+  _captureSession.sessionPreset = AVCaptureSessionPresetPhoto;
+  //[self setCaptureSessionPreset:_resolutionPreset];
   return self;
 }
 
