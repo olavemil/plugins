@@ -80,18 +80,7 @@ static FlutterError *getFlutterError(NSError *error) {
   UIImage *image = [UIImage imageWithCGImage:[UIImage imageWithData:data].CGImage
                                        scale:1.0
                                  orientation:[self getImageRotation]];
-  CGFloat originalAspectRatio = image.size.width / image.size.height;
-  BOOL constrainHeight = originalAspectRatio < 0.75f;
-  CGFloat width = constrainHeight ? image.size.width : image.size.height / 0.75f;
-  CGFloat height = constrainHeight ? image.size.height * 0.75f : image.size.height;
-  CGFloat dx = -(image.size.width - width)/2;
-  CGFloat dy = -(image.size.height - height)/2;
-  CGRect rect = CGRectMake(dx, dy, width, height);
-  CGSize newSize = CGSizeMake(width, height);
-  UIGraphicsBeginImageContext(newSize);
-  [image drawInRect: rect];
-  UIImage* newImage = UIGraphicsGetImageFromCurrentImageContext();
-  UIGraphicsEndImageContext();
+    UIImage *newImage = [self maybeCrop:image];
   // TODO(sigurdm): Consider writing file asynchronously.
   bool success = [UIImageJPEGRepresentation(newImage, 1.0) writeToFile:_path atomically:YES];
   if (!success) {
@@ -99,6 +88,30 @@ static FlutterError *getFlutterError(NSError *error) {
     return;
   }
   _result(nil);
+}
+
+- (UIImage *)maybeCrop:(UIImage *)image {
+    CGFloat originalAspectRatio = image.size.width / image.size.height;
+    if (originalAspectRatio > 0.75f && originalAspectRatio < 1.333f) {
+        return image;
+    }
+    BOOL isPortrait = originalAspectRatio < 1.0;
+    CGFloat width = image.size.width;
+    CGFloat height = image.size.height;
+    if (isPortrait) {
+        height = image.size.width / 0.75f;
+    } else {
+        width = image.size.height / 0.75f;
+    }
+    CGSize newSize = CGSizeMake(width, height);
+    CGFloat dx = (image.size.width - width)/2;
+    CGFloat dy = (image.size.height - height)/2;
+    CGRect rect = CGRectMake(-dx, -dy, image.size.width, image.size.height);
+    UIGraphicsBeginImageContextWithOptions(newSize, NO, 0.0);
+    [image drawInRect: rect];
+    UIImage* newImage = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    return newImage;
 }
 
 - (UIImageOrientation)getImageRotation {
