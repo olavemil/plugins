@@ -629,4 +629,37 @@ class CameraController extends ValueNotifier<CameraValue> {
       throw CameraException(e.code, e.message);
     }
   }
+
+  /// Set a focusArea of height and width 48 px at the position indicated by [x] and [y].
+  /// The coordinates are relative to the size of the sensor, and should be between 0 and 1.
+  Future<void> setFocusAt({@required double x, @required double y}) async {
+    ArgumentError.checkNotNull(x, 'x');
+    ArgumentError.checkNotNull(y, 'y');
+    if (x < 0.0 || x > 1.0) {
+      throw ArgumentError.value(x, 'x', 'Value out of range; expected value between 0.0 and 1.0');
+    }
+    if (y < 0.0 || y > 1.0) {
+      throw ArgumentError.value(y, 'y', 'Value out of range; expected value between 0.0 and 1.0');
+    }
+    if (!value.isInitialized || _isDisposed) {
+      throw CameraException(
+        'Uninitialized CameraController',
+        'setFocusAt was called on uninitialized CameraController.',
+      );
+    }
+    if (value.isTakingPicture) {
+      throw CameraException(
+        'Previous capture has not returned yet.',
+        'setFocusAt was called before the previous capture returned.',
+      );
+    }
+    try {
+      await _channel.invokeMethod<void>(
+        'setFocusAt',
+        <String, dynamic>{'x': x, 'y': y},
+      );
+    } on PlatformException catch (e) {
+      throw CameraException(e.code, e.message);
+    }
+  }
 }

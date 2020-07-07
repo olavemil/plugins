@@ -108,6 +108,11 @@ final class MethodCallHandlerImpl implements MethodChannel.MethodCallHandler {
           camera.setFlashMode(call.argument("flashMode"), result);
           break;
         }
+      case "setFocusAt":
+        {
+          camera.setFocusAt(call.argument("x"), call.argument("y"), result);
+          break;
+        }
       case "startImageStream":
         {
           try {
