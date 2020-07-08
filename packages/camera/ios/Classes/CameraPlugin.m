@@ -235,6 +235,7 @@ static FlashMode getFlashModeForString(NSString *mode) {
 - (void)stopImageStream;
 - (void)captureToFile:(NSString *)filename result:(FlutterResult)result;
 - (void)setFlashMode:(NSString *)flashMode result:(FlutterResult)result;
+- (void)setFocusAtX:(CGFloat)x y:(CGFloat)y result:(FlutterResult)result;
 @end
 
 @implementation FLTCam {
@@ -808,8 +809,16 @@ FourCharCode const videoFormat = kCVPixelFormatType_32BGRA;
   }
 }
 - (void)setFlashMode:(NSString *)flashMode result:(FlutterResult)result {
-    _flashMode = getFlashModeForString(flashMode);
-    result(nil);
+  _flashMode = getFlashModeForString(flashMode);
+  result(nil);
+}
+
+- (void)setFocusAtX:(CGFloat)x y:(CGFloat)y result:(FlutterResult)result {
+  if ([_captureDevice lockForConfiguration:nil]) {
+    _captureDevice.focusPointOfInterest = CGPointMake(y, 1.0f - x);
+    _captureDevice.focusMode = AVCaptureFocusModeAutoFocus;
+  }
+  result(nil);
 }
 @end
 
@@ -930,7 +939,11 @@ FourCharCode const videoFormat = kCVPixelFormatType_32BGRA;
     [_camera resumeVideoRecording];
     result(nil);
   } else if ([@"setFlashMode" isEqualToString:call.method]) {
-    [_camera setFlashMode:call.arguments[@"flashMode"] result:result];
+      [_camera setFlashMode:call.arguments[@"flashMode"] result:result];
+  } else if ([@"setFocusAt" isEqualToString:call.method]) {
+      [_camera setFocusAtX:((NSNumber *)call.arguments[@"x"]).floatValue
+                         y:((NSNumber *)call.arguments[@"y"]).floatValue
+                    result:result];
   } else {
     NSDictionary *argsMap = call.arguments;
     NSUInteger textureId = ((NSNumber *)argsMap[@"textureId"]).unsignedIntegerValue;

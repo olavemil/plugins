@@ -557,23 +557,23 @@ public class Camera {
   }
 
   public void setFocusAt(double x, double y, Result result) {
-    captureRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
-    captureRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO);
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-      captureRequestBuilder.set(CaptureRequest.DISTORTION_CORRECTION_MODE, CaptureRequest.DISTORTION_CORRECTION_MODE_OFF);
-    }
-    final CameraCharacteristics cameraCharacteristics;
     try {
-      cameraCharacteristics = cameraManager.getCameraCharacteristics(cameraName);
+      trySettingFocus(x, y);
+      result.success(null);
     } catch (CameraAccessException e) {
       e.printStackTrace();
       result.error("CameraAccess", e.getMessage(), null);
-      return;
     }
+  }
+
+  private void trySettingFocus(double x, double y) throws CameraAccessException {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+      captureRequestBuilder.set(CaptureRequest.DISTORTION_CORRECTION_MODE, CaptureRequest.DISTORTION_CORRECTION_MODE_OFF);
+    }
+    final CameraCharacteristics cameraCharacteristics = cameraManager.getCameraCharacteristics(cameraName);
     final Integer maxRegions = cameraCharacteristics.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AF);
-    final int regionSize = 48;
+    final int regionSize = 96;
     if (maxRegions == null || maxRegions == 0) {
-      result.success(null);
       return;
     }
     if (focusAreas == null) {
@@ -587,7 +587,6 @@ public class Camera {
       rect = cameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
     }
     if (rect == null) {
-      result.success(null);
       return;
     }
     int l = (int) (x * (rect.width() - regionSize/2)) + regionSize/2;
@@ -596,54 +595,61 @@ public class Camera {
             Math.max(l, 0), Math.max(u, 0),
             regionSize, regionSize,
             MeteringRectangle.METERING_WEIGHT_MAX -1);
-    captureRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO);
-    captureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_START);
-    captureRequestBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, focusAreas);
-    CaptureRequest captureRequest = captureRequestBuilder.build();
-      captureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_IDLE);
-      try {
-      cameraCaptureSession.capture(captureRequest,
-        new CameraCaptureSession.CaptureCallback() {
-          @Override
-          public void onCaptureCompleted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull TotalCaptureResult innerResult) {
-            Integer state = innerResult.get(CaptureResult.CONTROL_AF_STATE);
-            if (state == null) {
-              return;
-            }
-            captureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_IDLE);
-            try {
-              cameraCaptureSession.setRepeatingRequest(captureRequestBuilder.build(), null, null);
-            } catch (CameraAccessException e) {
-              e.printStackTrace();
-              result.error("CameraAccess", e.getMessage(), null);
-            }
-          }
 
-          @Override
-          public void onCaptureFailed(
-                  @NonNull CameraCaptureSession session,
-                  @NonNull CaptureRequest request,
-                  @NonNull CaptureFailure failure) {
-            String reason;
-            switch (failure.getReason()) {
-              case CaptureFailure.REASON_ERROR:
-                reason = "An error happened in the framework";
-                break;
-              case CaptureFailure.REASON_FLUSHED:
-                reason = "The capture has failed due to an abortCaptures() call";
-                break;
-              default:
-                reason = "Unknown reason";
-            }
-            result.error("captureFailure", reason, null);
+    ///
+
+    CameraCaptureSession.CaptureCallback captureCallbackHandler = new CameraCaptureSession.CaptureCallback() {
+      @Override
+      public void onCaptureCompleted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull TotalCaptureResult innerResult) {
+        super.onCaptureCompleted(session, request, innerResult);
+        if (request.getTag() == "FOCUS_TAG") {
+          //the focus trigger is complete -
+          //resume repeating (preview surface will get frames), clear AF trigger
+          captureRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO);
+          captureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
+          try {
+            cameraCaptureSession.setRepeatingRequest(captureRequestBuilder.build(), null, null);
+          } catch (CameraAccessException e) {
+            e.printStackTrace();
           }
-        },
-        null);
-    } catch (CameraAccessException e) {
-      e.printStackTrace();
-      result.error("CameraAccess", e.getMessage(), null);
-      return;
-    }
-    result.success(null);
+        }
+      }
+
+      @Override
+      public void onCaptureFailed(
+              @NonNull CameraCaptureSession session,
+              @NonNull CaptureRequest request,
+              @NonNull CaptureFailure failure) {
+        String reason;
+        switch (failure.getReason()) {
+          case CaptureFailure.REASON_ERROR:
+            reason = "An error happened in the framework";
+            break;
+          case CaptureFailure.REASON_FLUSHED:
+            reason = "The capture has failed due to an abortCaptures() call";
+            break;
+          default:
+            reason = "Unknown reason";
+        }
+      }
+    };
+
+    //first stop the existing repeating request
+    cameraCaptureSession.stopRepeating();
+
+    //cancel any existing AF trigger (repeated touches, etc.)
+    captureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_CANCEL);
+    captureRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF);
+    cameraCaptureSession.capture(captureRequestBuilder.build(), captureCallbackHandler, null);
+
+    //Now add a new AF trigger with focus region
+    captureRequestBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, focusAreas);
+    captureRequestBuilder.set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO);
+    captureRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO);
+    captureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_START);
+    captureRequestBuilder.setTag("FOCUS_TAG"); //we'll capture this later for resuming the preview
+
+    //then we ask for a single request (not repeating!)
+    cameraCaptureSession.capture(captureRequestBuilder.build(), captureCallbackHandler, null);
   }
 }
